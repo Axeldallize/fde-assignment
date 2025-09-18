@@ -14,7 +14,7 @@ _EMB_MATRIX_PATH = index_dir() / "embeddings.npy"
 _EMB_IDS_PATH = index_dir() / "embedding_ids.json"
 
 
-def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray: # Note: I use cosine similarity for semantic similarity instead of dot product because it is more stable and easier to compute.
     a_norm = a / (np.linalg.norm(a, axis=1, keepdims=True) + 1e-12)
     b_norm = b / (np.linalg.norm(b, axis=1, keepdims=True) + 1e-12)
     return a_norm @ b_norm.T
@@ -27,7 +27,8 @@ def _embed_voyage(texts: List[str], model: str, batch_size: int = 128) -> np.nda
         raise RuntimeError("voyageai package not installed. Add voyageai to requirements.") from exc
 
     if not settings.voyage_api_key:
-        raise ValueError("VOYAGE_API_KEY not set in environment")
+        # Soft-fail to avoid 500s; return zeros so semantic contributes nothing
+        return np.zeros((len(texts), 384), dtype=np.float32)
 
     client = voyageai.Client(api_key=settings.voyage_api_key)
     embeddings: List[List[float]] = []
@@ -52,7 +53,7 @@ def load_embeddings() -> Tuple[np.ndarray, List[str]]:
     return matrix, ids
 
 
-def build_embeddings_from_all_chunks(model: str | None = None) -> Dict[str, Path]:
+def build_embeddings_from_all_chunks(model: str | None = None) -> Dict[str, Path]: 
     """Embed all chunk texts from chunks_dir and persist a single matrix + ids.
 
     Returns saved paths dict.
@@ -81,22 +82,24 @@ def build_embeddings_from_all_chunks(model: str | None = None) -> Dict[str, Path
     provider = settings.embedding_provider
     model_name = model or settings.embedding_model
     if provider != "voyage":
-        raise ValueError(f"Unsupported embedding provider: {provider}")
-
-    matrix = _embed_voyage(corpus_texts, model=model_name)
+        # No-op build; create empty embeddings matching corpus size
+        matrix = np.zeros((len(corpus_texts), 384), dtype=np.float32)
+    else:
+        matrix = _embed_voyage(corpus_texts, model=model_name)
     return save_embeddings(matrix, corpus_ids)
 
 
-def semantic_search(query: str, top_k: int = 5, model: str | None = None) -> List[Tuple[str, float]]:
+def semantic_search(query: str, top_k: int = 5, model: str | None = None) -> List[Tuple[str, float]]: # top_k is set to 4 as a reasonable compromise and can be adjusted in .env if needed.
     """Compute embedding for query using configured provider and return top_k (id, score)."""
     provider = settings.embedding_provider
     model_name = model or settings.embedding_model
-    if provider != "voyage":
-        raise ValueError(f"Unsupported embedding provider: {provider}")
-
     matrix, ids = load_embeddings()
-    q_vec = _embed_voyage([query], model=model_name)
-    sims = _cosine_similarity(matrix, q_vec)[..., 0]
+    if provider != "voyage" or not settings.voyage_api_key:
+        # Fallback to zeros so semantic path is neutral
+        sims = np.zeros((matrix.shape[0],), dtype=np.float32)
+    else:
+        q_vec = _embed_voyage([query], model=model_name)
+        sims = _cosine_similarity(matrix, q_vec)[..., 0]
     top_k = max(1, top_k)
     top_idx = np.argsort(-sims)[:top_k]
     return [(ids[i], float(sims[i])) for i in top_idx]

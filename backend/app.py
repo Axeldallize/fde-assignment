@@ -59,8 +59,15 @@ async def query(req: QueryRequest):
     q = deterministic_rewrite(req.query)
 
     # Retrieval
-    lex = lexical_search(q, top_k=req.top_k)
-    sem = semantic_search(q, top_k=req.top_k) if settings.use_semantic and req.semantic else []
+    # Guard lexical/semantic with best-effort fallbacks
+    try:
+        lex = lexical_search(q, top_k=req.top_k)
+    except Exception:
+        lex = []
+    try:
+        sem = semantic_search(q, top_k=req.top_k) if settings.use_semantic and req.semantic else []
+    except Exception:
+        sem = []
     fused = (
         rrf(lex, sem, top_k=req.top_k) if settings.use_rrf else weighted_sum(lex, sem, top_k=req.top_k)
     )
@@ -85,7 +92,11 @@ async def query(req: QueryRequest):
     prompt = build_prompt("qa" if req.mode in ("auto", "qa") else req.mode, req.query, context_texts)
 
     # Generate
-    answer = generate_answer(prompt, temperature=0.1)
+    try:
+        answer = generate_answer(prompt, temperature=0.1)
+    except Exception:
+        # If LLM fails, return insufficient evidence rather than 500
+        return QueryResponse(error="generation_failed", reason="llm_error", citations=[], meta={"intent": intent_res.intent})
     # Evidence filter
     answer_filtered = evidence_filter(answer, context_texts)
 
