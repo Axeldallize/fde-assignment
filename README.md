@@ -61,9 +61,15 @@ npm run dev
   - Hybrid chunking: heading-bounded with ~15% overlap (target ~1k tokens)
   - Persistence: JSONL chunks + texts/map sidecars
   - Lexical index: TF‑IDF (1–2 grams, english stopwords), saved vectorizer/matrix/ids
-  - Orchestrator + endpoint: `/ingest` wires extract→chunk→persist→manifest→rebuild index
+  - Orchestrator + endpoint: `/ingest` wires extract→chunk→persist→manifest→rebuild index (and embeddings if semantic enabled)
   - Smoke tests: `scripts/pdf_extract_smoke.py`, `scripts/chunk_smoke.py`, `scripts/build_tfidf_and_query_smoke.py`
-- Phase 2: query 
+- Phase 2: query — DONE
+  - Intent detection (smalltalk/qa) and deterministic rewrite
+  - Retrieval: lexical (TF‑IDF) + semantic (Voyage); fusion (weighted‑sum default; RRF optional)
+  - Rerank: coverage + heading bonus
+  - Evidence gate: mean top‑k similarity + multi‑source requirement
+  - Generation: Anthropic (Claude) with templates (qa/list/table); smalltalk politely refuses
+  - Evidence check: sentence‑level support filter
 - Phase 3: minimal UI
 - Phase 4: tests
 
@@ -93,3 +99,23 @@ ls -lah backend/data/index/
 ```
 PYTHONPATH=$PWD python scripts/build_tfidf_and_query_smoke.py
 ```
+
+### Query quickstart
+
+1) Ensure embeddings are built if using semantic
+```
+PYTHONPATH=$PWD python - <<'PY'
+from backend.index.semantic import build_embeddings_from_all_chunks
+build_embeddings_from_all_chunks()
+print("Embeddings built.")
+PY
+```
+
+2) Query via Swagger (POST `/query`) or curl
+```
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"what is covered in the introduction?","mode":"auto","top_k":12,"semantic":true,"llm_expand":false}'
+```
+
+Response includes `answer`, `citations`, and `meta` (intent, threshold_passed, used_semantic).
