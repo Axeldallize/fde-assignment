@@ -1,8 +1,9 @@
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8000'
 
-export async function ingestFiles(files: FileList) {
+export async function ingestFiles(files: File[] | FileList) {
   const form = new FormData()
-  Array.from(files).forEach((f) => form.append('files', f))
+  const list: File[] = Array.isArray(files) ? (files as File[]) : Array.from(files as FileList)
+  list.forEach((f) => form.append('files', f))
   const res = await fetch(`${BASE}/ingest`, {
     method: 'POST',
     body: form,

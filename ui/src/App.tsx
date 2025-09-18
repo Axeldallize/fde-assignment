@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { ingestFiles, queryApi } from './api'
 
 export default function App() {
-  const [files, setFiles] = useState<FileList | null>(null)
+  const [files, setFiles] = useState<File[] | null>(null)
   const [query, setQuery] = useState('')
   const [topK, setTopK] = useState(12)
   const [useSemantic, setUseSemantic] = useState(true)
@@ -15,10 +17,17 @@ export default function App() {
   const [citations, setCitations] = useState<any[]>([])
   const [meta, setMeta] = useState<any>({})
   const [busy, setBusy] = useState(false)
+  // Work around TS type mismatch for react-markdown in some toolchains
+  const Markdown: any = ReactMarkdown
+
+  const labelStyle: React.CSSProperties = { fontSize: 12, color: '#334155', fontWeight: 600 }
+  const inputStyle: React.CSSProperties = { width: '90%', padding: 6, border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 14 }
+  const checkboxStyle: React.CSSProperties = { accentColor: '#2563eb', width: 18, height: 18 }
 
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
-    setFiles(e.dataTransfer.files)
+    const f = Array.from(e.dataTransfer.files || []).filter((x) => x.type === 'application/pdf')
+    setFiles(f)
   }
 
   const onUpload = async () => {
@@ -60,44 +69,65 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'Inter, system-ui, Arial', padding: 24, maxWidth: 980, margin: '0 auto' }}>
-      <h2>RAG UI</h2>
+      <h2 style={{ marginBottom: 8 }}>RAG UI</h2>
+      <p style={{ color: '#666', marginTop: 0 }}>Upload PDFs and ask questions. Toggle retrieval knobs below.</p>
 
-      <section style={{ marginBottom: 24, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
+      <section style={{ marginBottom: 24, padding: 16, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fafafa' }}>
         <h3>Upload PDFs</h3>
         <div
           onDrop={onDrop}
           onDragOver={(e) => e.preventDefault()}
-          style={{ padding: 24, border: '2px dashed #aaa', borderRadius: 8, marginBottom: 12 }}
+          style={{ padding: 24, border: '2px dashed #cbd5e1', borderRadius: 8, marginBottom: 12, background: '#fff' }}
         >
           Drag & drop files here
         </div>
-        <input type="file" multiple accept="application/pdf" onChange={(e) => setFiles(e.target.files)} />
-        <button onClick={onUpload} disabled={busy} style={{ marginLeft: 12 }}>Ingest</button>
+        <input type="file" multiple accept="application/pdf" onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : null)} />
+        <button onClick={onUpload} disabled={busy || !files || files.length === 0} style={{ marginLeft: 12, padding: '6px 12px' }}>Ingest</button>
       </section>
 
-      <section style={{ marginBottom: 24, padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
+      <section style={{ marginBottom: 24, padding: 16, border: '1px solid #e5e7eb', borderRadius: 12, background: '#fafafa' }}>
         <h3>Ask</h3>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ask a question" style={{ flex: 1 }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ask a question" style={{ flex: 1, padding: 8, border: '1px solid #cbd5e1', borderRadius: 6 }} />
           <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
             <option value="auto">auto</option>
             <option value="qa">qa</option>
             <option value="list">list</option>
             <option value="table">table</option>
           </select>
-          <button onClick={onAsk} disabled={busy}>Send</button>
+          <button onClick={onAsk} disabled={busy} style={{ padding: '6px 12px' }}>Send</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 8 }}>
-          <label>top_k <input type="number" value={topK} min={1} onChange={(e) => setTopK(parseInt(e.target.value, 10))} /></label>
-          <label>semantic <input type="checkbox" checked={useSemantic} onChange={(e) => setUseSemantic(e.target.checked)} /></label>
-          <label>use_rrf <input type="checkbox" checked={useRrf} onChange={(e) => setUseRrf(e.target.checked)} /></label>
-          <label>threshold <input type="number" step={0.01} value={threshold} onChange={(e) => setThreshold(parseFloat(e.target.value))} /></label>
-          <label>evidence_topk <input type="number" min={1} value={evidenceTopK} onChange={(e) => setEvidenceTopK(parseInt(e.target.value, 10))} /></label>
-          <label>temperature <input type="number" step={0.05} value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} /></label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 12, alignItems: 'end' }}>
+          <div>
+            <div style={labelStyle}>top_k</div>
+            <input type="number" value={topK} min={1} onChange={(e) => setTopK(parseInt(e.target.value, 10) || 1)} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>semantic</div>
+            <input type="checkbox" checked={useSemantic} onChange={(e) => setUseSemantic(e.target.checked)} style={checkboxStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>use_rrf</div>
+            <input type="checkbox" checked={useRrf} onChange={(e) => setUseRrf(e.target.checked)} style={checkboxStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>threshold</div>
+            <input type="number" step={0.01} value={threshold} onChange={(e) => setThreshold(parseFloat(e.target.value) || 0)} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>evidence_topk</div>
+            <input type="number" min={1} value={evidenceTopK} onChange={(e) => setEvidenceTopK(parseInt(e.target.value, 10) || 1)} style={inputStyle} />
+          </div>
+          <div>
+            <div style={labelStyle}>temperature</div>
+            <input type="number" step={0.05} value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)} style={inputStyle} />
+          </div>
         </div>
         <div>
           <strong>Answer</strong>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{answer}</pre>
+          <div style={{ padding: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <Markdown remarkPlugins={[remarkGfm]}>{answer || ''}</Markdown>
+          </div>
           <strong>Citations</strong>
           <ul>
             {citations.map((c, i) => (

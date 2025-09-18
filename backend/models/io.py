@@ -14,6 +14,11 @@ class QueryRequest(BaseModel):
     top_k: int = 12
     semantic: bool = True
     llm_expand: bool = False
+    # Runtime overrides
+    use_rrf: Optional[bool] = None
+    evidence_threshold: Optional[float] = None
+    evidence_topk: Optional[int] = None
+    temperature: Optional[float] = None
 
 
 class Citation(BaseModel):
