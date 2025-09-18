@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .utils.logging import configure_logging
 from .models.io import IngestResponse, QueryRequest, QueryResponse, Citation
@@ -21,6 +22,14 @@ from .generation.evidence_check import evidence_filter
 configure_logging(settings.log_level)
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")
@@ -68,9 +77,8 @@ async def query(req: QueryRequest):
         sem = semantic_search(q, top_k=req.top_k) if settings.use_semantic and req.semantic else []
     except Exception:
         sem = []
-    fused = (
-        rrf(lex, sem, top_k=req.top_k) if settings.use_rrf else weighted_sum(lex, sem, top_k=req.top_k)
-    )
+    use_rrf = req.use_rrf if req.use_rrf is not None else settings.use_rrf
+    fused = rrf(lex, sem, top_k=req.top_k) if use_rrf else weighted_sum(lex, sem, top_k=req.top_k)
 
     # Build maps for rerank and citations
     chunk_ids = [cid for cid, _ in fused]
@@ -82,7 +90,11 @@ async def query(req: QueryRequest):
     reranked = rerank_by_heuristics(req.query, fused, id2text, id2heading, top_k=req.top_k)
 
     # Gate
-    passed, gate_meta = evidence_gate(reranked, id2doc)
+    # Allow threshold overrides
+    thr = req.evidence_threshold if req.evidence_threshold is not None else None
+    if req.evidence_topk is not None:
+        settings.evidence_topk = req.evidence_topk  # transient for this process
+    passed, gate_meta = evidence_gate(reranked, id2doc, threshold=thr)
     if not passed:
         return QueryResponse(error="insufficient_evidence", reason="gate_failed", citations=[], meta=gate_meta)
 
@@ -93,7 +105,8 @@ async def query(req: QueryRequest):
 
     # Generate
     try:
-        answer = generate_answer(prompt, temperature=0.1)
+        temp = 0.1 if req.temperature is None else req.temperature
+        answer = generate_answer(prompt, temperature=temp)
     except Exception:
         # If LLM fails, return insufficient evidence rather than 500
         return QueryResponse(error="generation_failed", reason="llm_error", citations=[], meta={"intent": intent_res.intent})
