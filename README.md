@@ -1,6 +1,33 @@
 # RAG Pipeline (FastAPI + React) — Assignment
 
-This repo contains a minimal Retrieval-Augmented Generation (RAG) backend and UI scaffold. Priority: accuracy > simplicity > speed. Phase 0 includes skeleton, config, JSON logging, and a health endpoint.
+This repo contains a minimal Retrieval-Augmented Generation (RAG) backend and UI scaffold. Priority: accuracy > simplicity > speed.
+
+## Basic design specs (at a glance)
+- Private demo: no auth/rate‑limit; single‑tenant; local dev (macOS/Linux), Python 3.12.
+- Data assumptions:
+  - PDFs: digitally born (no OCR); per‑file ≤ 25 MB; ≤ 10 files per upload.
+  - Corpus scale: ≤ 50 PDFs total, ≤ ~2k pages; memory budget ~2 GB for indices.
+  - Persistence: file‑backed under `backend/data/` (no database, ephemeral; re‑ingest acceptable).
+- Ingestion:
+  - Extraction: PyMuPDF plain text + heading hints.
+  - Chunking: hybrid, heading‑bounded with ~1k‑token target, ~15% overlap; metadata (doc_id, page_range, headings_path).
+- Retrieval:
+  - Lexical: TF‑IDF (1–2 grams, english stopwords), cosine.
+  - Semantic (optional): Voyage `voyage-3.5` embeddings; flat NumPy cosine; no third‑party vector DB.
+  - Fusion: normalized weighted‑sum (default); RRF optional via flag.
+  - Rerank: heuristic boosts (query‑term coverage, heading match) + diversity.
+- Gating and safety:
+  - “Insufficient evidence” if mean top‑k similarity < threshold (default 0.28) or too few distinct sources.
+  - Smalltalk politely refused; PII queries (e.g., SSNs) refused.
+  - Sentence‑level evidence filter drops unsupported lines (threshold ≈ 0.15).
+- Generation:
+  - Anthropic `claude-sonnet-4-20250514`, low temperature (≈0.1), templates for qa/list/table.
+- API/UI:
+  - Endpoints: `POST /ingest` (multipart PDFs), `POST /query` (json).
+  - UI: React/Vite (uploader + chat), controls for `top_k`, `semantic`, `use_rrf`, `evidence_topk`, `evidence_threshold`, `temperature`.
+- Libraries (selection):
+  - FastAPI, Uvicorn, Pydantic, PyMuPDF, NumPy, scikit‑learn, httpx
+  - Anthropic SDK (generation), Voyage AI (embeddings)
 
 ## Quickstart
 
