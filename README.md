@@ -24,11 +24,12 @@ USE_SEMANTIC=true
 USE_RRF=false
 EVIDENCE_TOPK=4
 EVIDENCE_THRESHOLD=0.28
-LLM_PROVIDER=mistral
-MISTRAL_MODEL=mistral-small-2506 # Note: I use the smaller model to mminimize costs for StackAI, which also allows for lower latency, but less accurate results as a trade-off
-EMBEDDING_PROVIDER=mistral
-EMBEDDING_MODEL=mistral-embed
-# MISTRAL_API_KEY=...
+LLM_PROVIDER=anthropic
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
+EMBEDDING_PROVIDER=voyage
+EMBEDDING_MODEL=voyage-3.5
+# ANTHROPIC_API_KEY=...
+# VOYAGE_API_KEY=...
 ```
 
 3) Run API
@@ -51,11 +52,44 @@ npm run dev
 - Python 3.12, pip+venv
 - No auth/rate limit (private demo)
 - Fusion default: normalized weighted-sum (RRF flag available, default false)
-- Embeddings default: Mistral API
+- Embeddings default: Voyage API
 - Persistence: transient files under `backend/data/` (re-ingest acceptable)
 
 ## Next phases
-- Phase 1: ingestion 
+- Phase 1: ingestion — DONE
+  - PDF extraction (PyMuPDF): per-page text + heading candidates
+  - Hybrid chunking: heading-bounded with ~15% overlap (target ~1k tokens)
+  - Persistence: JSONL chunks + texts/map sidecars
+  - Lexical index: TF‑IDF (1–2 grams, english stopwords), saved vectorizer/matrix/ids
+  - Orchestrator + endpoint: `/ingest` wires extract→chunk→persist→manifest→rebuild index
+  - Smoke tests: `scripts/pdf_extract_smoke.py`, `scripts/chunk_smoke.py`, `scripts/build_tfidf_and_query_smoke.py`
 - Phase 2: query 
 - Phase 3: minimal UI
 - Phase 4: tests
+
+### Ingestion quickstart
+
+1) Start API and open docs
+```
+source .venv/bin/activate
+python -m uvicorn backend.app:app --reload --port 8000
+open http://localhost:8000/docs
+```
+
+2) Use POST `/ingest` to upload one or more PDFs (field name `files`).
+
+3) Verify artifacts
+```
+ls -lah backend/data/docs/
+cat backend/data/manifests/manifest.json | sed -n '1,120p'
+ls -lah backend/data/chunks/
+head -n 2 backend/data/chunks/<doc_id>.jsonl
+cat backend/data/chunks/<doc_id>.texts.json | sed -n '1,80p'
+cat backend/data/chunks/<doc_id>.map.json | sed -n '1,80p'
+ls -lah backend/data/index/
+```
+
+4) Optional: lexical retrieval smoke test
+```
+PYTHONPATH=$PWD python scripts/build_tfidf_and_query_smoke.py
+```
