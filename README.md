@@ -25,7 +25,7 @@ USE_RRF=false
 EVIDENCE_TOPK=4
 EVIDENCE_THRESHOLD=0.28
 LLM_PROVIDER=mistral
-MISTRAL_MODEL=mistral-large-latest
+MISTRAL_MODEL=mistral-small-2506 # Note: I use the smaller model to mminimize costs for StackAI, which also allows for lower latency, but less accurate results as a trade-off
 EMBEDDING_PROVIDER=mistral
 EMBEDDING_MODEL=mistral-embed
 # MISTRAL_API_KEY=...
@@ -47,15 +47,15 @@ npm i
 npm run dev
 ```
 
-## Decisions (Phase 0 snapshot)
+## Decisions and considerations
 - Python 3.12, pip+venv
 - No auth/rate limit (private demo)
 - Fusion default: normalized weighted-sum (RRF flag available, default false)
-- Embeddings default: OpenAI API
+- Embeddings default: Mistral API
 - Persistence: transient files under `backend/data/` (re-ingest acceptable)
 
 ## Next phases
-- Phase 1: ingestion (PDF extract + chunking + TF-IDF, optional embeddings)
-- Phase 2: query (intent, rewrite, retrieval, fusion, rerank, gate, generation)
-- Phase 3: minimal React UI (chat, upload, citations)
+- Phase 1: ingestion 
+- Phase 2: query 
+- Phase 3: minimal UI
 - Phase 4: tests
