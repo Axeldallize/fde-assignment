@@ -40,39 +40,6 @@ uvicorn backend.app:app --reload
 
 Visit `/health` to check readiness.
 
-4) UI (placeholder)
-
-```
-cd ui
-npm i
-npm run dev
-```
-
-## Decisions and considerations
-- Python 3.12, pip+venv
-- No auth/rate limit (private demo)
-- Fusion default: normalized weighted-sum (RRF flag available, default false)
-- Embeddings default: Voyage API
-- Persistence: transient files under `backend/data/` (re-ingest acceptable)
-
-## Next phases
-- Phase 1: ingestion — DONE
-  - PDF extraction (PyMuPDF): per-page text + heading candidates
-  - Hybrid chunking: heading-bounded with ~15% overlap (target ~1k tokens)
-  - Persistence: JSONL chunks + texts/map sidecars
-  - Lexical index: TF‑IDF (1–2 grams, english stopwords), saved vectorizer/matrix/ids
-  - Orchestrator + endpoint: `/ingest` wires extract→chunk→persist→manifest→rebuild index (and embeddings if semantic enabled)
-  - Smoke tests: `scripts/pdf_extract_smoke.py`, `scripts/chunk_smoke.py`, `scripts/build_tfidf_and_query_smoke.py`
-- Phase 2: query — DONE
-  - Intent detection (smalltalk/qa) and deterministic rewrite
-  - Retrieval: lexical (TF‑IDF) + semantic (Voyage); fusion (weighted‑sum default; RRF optional)
-  - Rerank: coverage + heading bonus
-  - Evidence gate: mean top‑k similarity + multi‑source requirement
-  - Generation: Anthropic (Claude) with templates (qa/list/table); smalltalk politely refuses
-  - Evidence check: sentence‑level support filter
-- Phase 3: minimal UI
-- Phase 4: tests
-
 ### Ingestion quickstart
 
 1) Start API and open docs
