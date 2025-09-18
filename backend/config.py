@@ -20,13 +20,15 @@ class Settings(BaseModel):
     evidence_topk: int = int(os.getenv("EVIDENCE_TOPK", "4"))
     evidence_threshold: float = float(os.getenv("EVIDENCE_THRESHOLD", "0.28"))
 
-    # LLM/Embeddings provider (Mistral by default)
-    llm_provider: str = os.getenv("LLM_PROVIDER", "mistral")
-    mistral_api_key: str | None = os.getenv("MISTRAL_API_KEY")
-    mistral_model: str = os.getenv("MISTRAL_MODEL", "mistral-large-latest")
+    # LLM provider (Anthropic by default)
+    llm_provider: str = os.getenv("LLM_PROVIDER", "anthropic")
+    anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY")
+    anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
-    embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "mistral")
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "mistral-embed")
+    # Embeddings provider (Voyage by default)
+    embedding_provider: str = os.getenv("EMBEDDING_PROVIDER", "voyage")
+    voyage_api_key: str | None = os.getenv("VOYAGE_API_KEY")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "voyage-3.5")
 
 
 settings = Settings()
