@@ -119,3 +119,92 @@ curl -X POST http://localhost:8000/query \
 ```
 
 Response includes `answer`, `citations`, and `meta` (intent, threshold_passed, used_semantic).
+
+## System architecture
+
+```mermaid
+flowchart LR
+  UI[React/Vite UI] -->|/ingest| API[FastAPI]
+  UI -->|/query| API
+
+  subgraph Backend
+    API --> INTENT[Intent detector]
+    INTENT -->|smalltalk| RESP[Polite refusal]
+    INTENT -->|qa| REW[Query rewrite]
+
+    REW --> LEX[TF‑IDF lexical index]
+    REW --> SEM[Embeddings index (Voyage)]
+    LEX --> FUSE[Fusion]
+    SEM --> FUSE
+    FUSE --> RER[Heuristic reranker]
+    RER --> GATE[Evidence gate]
+    GATE -->|fail| IE[Insufficient evidence]
+    GATE -->|pass| PROMPT[Prompt builder]
+    PROMPT --> LLM[Anthropic Claude]
+    LLM --> EC[Sentence‑level evidence filter]
+  end
+
+  EC --> RESP
+  IE --> RESP
+```
+
+## Design decisions and trade‑offs (highlights)
+
+- Chunking: hybrid, heading‑bounded (~1k tokens target) with ~15% overlap. Simpler than full layout parsing but preserves topical boundaries and improves recall.
+- Headings: heuristic detection (numbered headings, ALL‑CAPS short lines, title‑case). Lightweight and robust for mixed PDFs.
+- Lexical retrieval: TF‑IDF (1–2 grams, english stopwords), L2‑normalized; fast, explainable backstop for exact terms.
+- Semantic retrieval: Voyage `voyage-3.5` embeddings, cosine similarity, flat NumPy search (no external vector DB) to stay framework‑free.
+- Fusion: normalized weighted‑sum (default) with optional RRF flag for rank‑robust fusion across query styles.
+- Reranker: heuristic boost for query‑term coverage and heading match; favors diverse, better‑supported chunks.
+- Gate: requires mean top‑k similarity ≥ threshold (default 0.28) and multiple distinct sources; reduces hallucinations by refusing weak evidence.
+- Generation: Anthropic `claude-sonnet-4-20250514`, low temperature (0.1); prompt templates for qa/list/table; smalltalk politely refused.
+- Evidence filter: sentence‑level cosine vs. context; drops unsupported lines (threshold default 0.15) instead of fabricating.
+- Safety: smalltalk refusal; no PII extraction unless explicitly found in corpus (gate+filter enforce).
+- Persistence: file‑backed artifacts under `backend/data/`; rebuild lexical on ingest; rebuild embeddings when semantic enabled.
+- Config & toggles: runtime overrides on `/query` (use_rrf, top_k, evidence_topk/threshold, temperature); UI exposes controls.
+
+## Evaluation (probe set)
+
+Run:
+```
+API_BASE=http://localhost:8000 python scripts/run_eval.py
+```
+
+Summary (from `backend/data/eval_results.json`):
+
+```
+{
+  "total": 30,
+  "insufficient": 24,
+  "gen_failed": 0,
+  "shape_expected": 5,
+  "shape_ok": 2,
+  "used_semantic": 29
+}
+```
+
+Notes:
+- High “insufficient” reflects strict evidence gating and filtering (by design). Numeric drift/adversarial prompts are curtailed.
+- Shape checks passed for 2/5 where the corpus contained enough structure to render tables; others were refused or lacked structure.
+- Semantic used in 29/30 indicating embeddings built and active.
+- Full trace with per‑query notes lives at `backend/data/eval_results.json`.
+
+## Libraries and software
+
+- Backend
+  - FastAPI (`https://fastapi.tiangolo.com/`)
+  - Uvicorn (`https://www.uvicorn.org/`)
+  - Pydantic (`https://docs.pydantic.dev/`)
+  - PyMuPDF (`https://pymupdf.readthedocs.io/`)
+  - NumPy (`https://numpy.org/`)
+  - scikit‑learn (`https://scikit-learn.org/`)
+  - httpx (`https://www.python-httpx.org/`)
+  - Anthropic SDK (`https://docs.anthropic.com/claude/docs`)
+  - Voyage AI (`https://docs.voyageai.com/`)
+
+- Frontend
+  - React (`https://react.dev/`)
+  - Vite (`https://vitejs.dev/`)
+  - react‑markdown (`https://github.com/remarkjs/react-markdown`)
+  - remark‑gfm (`https://github.com/remarkjs/remark-gfm`)
+
