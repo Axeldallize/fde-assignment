@@ -99,8 +99,8 @@ flowchart LR
     INTENT -->|smalltalk| RESP[Polite refusal]
     INTENT -->|qa| REW[Query rewrite]
 
-    REW --> LEX[TF‑IDF lexical index]
-    REW --> SEM[Embeddings index (Voyage)]
+    REW --> LEX[TF-IDF lexical index]
+    REW --> SEM[Embeddings index - Voyage]
     LEX --> FUSE[Fusion]
     SEM --> FUSE
     FUSE --> RER[Heuristic reranker]
@@ -108,7 +108,7 @@ flowchart LR
     GATE -->|fail| IE[Insufficient evidence]
     GATE -->|pass| PROMPT[Prompt builder]
     PROMPT --> LLM[Anthropic Claude]
-    LLM --> EC[Sentence‑level evidence filter]
+    LLM --> EC[Sentence-level evidence filter]
   end
 
   EC --> RESP
